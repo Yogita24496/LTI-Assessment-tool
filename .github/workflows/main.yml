@@ -1,0 +1,74 @@
+name: LTI Assessment CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_REGISTRY: ghcr.io  # GitHub Container Registry
+  IMAGE_NAME: lti-assessment-app
+
+jobs:
+  test-build-deploy:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:latest
+        ports: ["27017:27017"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Set up Node.js (for React + Node.js)
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+
+      # Install dependencies
+      - name: Install dependencies
+        run: |
+          cd client && npm install
+          cd ../server && npm install
+
+      # Run tests
+      - name: Run tests
+        run: |
+          cd client && npm test
+          cd ../server && npm test
+
+      # Set up Python (for Python microservice)
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Test Python service
+      - name: Test Python service
+        run: |
+          cd python && pip install -r requirements.txt
+          pytest
+
+      # Build Docker images
+      - name: Build and push Docker images
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker build -t $DOCKER_REGISTRY/$IMAGE_NAME-client:latest ./client
+          docker build -t $DOCKER_REGISTRY/$IMAGE_NAME-server:latest ./server
+          docker build -t $DOCKER_REGISTRY/$IMAGE_NAME-python:latest ./python
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker push $DOCKER_REGISTRY/$IMAGE_NAME-client:latest
+          docker push $DOCKER_REGISTRY/$IMAGE_NAME-server:latest
+          docker push $DOCKER_REGISTRY/$IMAGE_NAME-python:latest
+
+      # Deploy (example for AWS ECS)
+      - name: Deploy to AWS ECS
+        if: github.ref == 'refs/heads/main'
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ./aws/task-definition.json
+          service: lti-assessment-service
+          cluster: lti-cluster
+          wait-for-service-stability: true

@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  client:
+    build: ./client
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://server:3001/api
+      - REACT_APP_PYTHON_API_URL=http://python:5000/api
+    depends_on:
+      - server
+      - python
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+
+  server:
+    build: ./server
+    ports:
+      - "3001:3001"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/lti-grade-passback
+      - NODE_ENV=development
+    depends_on:
+      - mongo
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+
+  python:
+    build: ./lti_python
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_DEBUG=True
+      - LTI_JWKS_URL=${LTI_JWKS_URL}
+      - LTI_TOKEN_ENDPOINT=${LTI_TOKEN_ENDPOINT}
+      - LTI_CLIENT_ID=${LTI_CLIENT_ID}
+      - LTI_PRIVATE_KEY=${LTI_PRIVATE_KEY}
+    volumes:
+      - ./lti_python:/app
+
+  mongo:
+    image: mongo:5.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
