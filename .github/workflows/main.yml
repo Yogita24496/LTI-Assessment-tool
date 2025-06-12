@@ -48,54 +48,57 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'client/package-lock.json'
       
-      - name: Install client dependencies with fallback
+      - name: Clean install client dependencies
         working-directory: ./client
         run: |
-          echo "=== Starting dependency installation ==="
+          echo "=== Starting clean dependency installation ==="
           
-          # Try npm ci first (preferred for CI)
-          if npm ci; then
-            echo "npm ci succeeded"
-          else
-            echo "npm ci failed, trying npm install"
-            rm -f package-lock.json
-            npm install
+          # Remove existing node_modules and package-lock.json for clean install
+          rm -rf node_modules package-lock.json
+          
+          # Install all dependencies fresh
+          npm install
+          
+          # Verify react-router-dom installation
+          echo "=== Verifying react-router-dom installation ==="
+          npm list react-router-dom || echo "react-router-dom not found in dependencies"
+          
+          # Check if react-router-dom is actually installed
+          if [ ! -d "node_modules/react-router-dom" ]; then
+            echo "react-router-dom directory not found, forcing installation..."
+            npm install react-router-dom@^6.8.0 --save
           fi
           
-          # Ensure react-router-dom is installed (defensive programming)
-          if ! npm list react-router-dom > /dev/null 2>&1; then
-            echo "react-router-dom not found, installing..."
-            npm install react-router-dom@^6.8.0
-          else
-            echo "react-router-dom is already installed"
-            npm list react-router-dom
-          fi
+          echo "=== Final dependency verification ==="
+          npm list react-router-dom
+          ls -la node_modules/react-router-dom || echo "react-router-dom directory missing"
           
-          echo "=== Final dependency list ==="
-          npm list --depth=0
+          echo "=== React Router Dom package.json check ==="
+          cat node_modules/react-router-dom/package.json | head -10 || echo "Cannot read react-router-dom package.json"
           
-          # Fix permissions for node_modules/.bin (Solution 1)
+          # Fix permissions
           echo "=== Fixing permissions ==="
           chmod -R +x node_modules/.bin/
           ls -la node_modules/.bin/react-scripts || echo "react-scripts not found in .bin"
       
-      - name: Run client tests
+      - name: Run client tests with better error handling
         working-directory: ./client
         run: |
-          echo "=== Running tests ==="
-          # Solution 2: Use npx instead of npm test
-          npx react-scripts test --coverage --watchAll=false --passWithNoTests --verbose
+          echo "=== Pre-test environment check ==="
+          echo "NODE_ENV: $NODE_ENV"
+          echo "CI: $CI"
+          
+          echo "=== Checking test files ==="
+          find src -name "*.test.js" -o -name "*.test.jsx" | head -5
+          
+          echo "=== Checking if react-router-dom is resolvable ==="
+          node -e "try { require('react-router-dom'); console.log('react-router-dom is resolvable'); } catch(e) { console.log('react-router-dom resolution failed:', e.message); }"
+          
+          echo "=== Running tests with verbose output ==="
+          npm test -- --coverage --watchAll=false --passWithNoTests --verbose --no-cache
         env:
           CI: true
-      
-      # Alternative approach - uncomment if the above doesn't work
-      # - name: Run client tests (Alternative)
-      #   working-directory: ./client
-      #   run: |
-      #     echo "=== Running tests with direct node execution ==="
-      #     node node_modules/.bin/react-scripts test --coverage --watchAll=false --passWithNoTests --verbose
-      #   env:
-      #     CI: true
+          NODE_ENV: test
       
       # ======================
       # SERVER (NODE.JS)
