@@ -2,9 +2,9 @@ name: LTI Assessment CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 env:
   DOCKER_REGISTRY: ghcr.io  # GitHub Container Registry
