@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moodle Token Endpoint Diagnostic</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+        
+        .section h2 {
+            margin-top: 0;
+            color: #444;
+            border-bottom: 2px solid #007cba;
+            padding-bottom: 10px;
+        }
+        
+        .test-button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+            transition: background-color 0.3s;
+        }
+        
+        .test-button:hover {
+            background: #005a87;
+        }
+        
+        .test-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            background: white;
+            border: 1px solid #ddd;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .endpoint-result {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #ddd;
+        }
+        
+        .endpoint-result.success {
+            background: #f0f9ff;
+            border-left-color: #10b981;
+        }
+        
+        .endpoint-result.warning {
+            background: #fffbeb;
+            border-left-color: #f59e0b;
+        }
+        
+        .endpoint-result.error {
+            background: #fef2f2;
+            border-left-color: #ef4444;
+        }
+        
+        .endpoint-url {
+            font-family: monospace;
+            font-weight: bold;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+        
+        .detail {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .recommendation {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .recommendation.success {
+            background: #f0fdf4;
+            border-color: #22c55e;
+        }
+        
+        .recommendation.warning {
+            background: #fffbeb;
+            border-color: #f59e0b;
+        }
+        
+        .recommendation.error {
+            background: #fef2f2;
+            border-color: #ef4444;
+        }
+        
+        .config-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .config-item {
+            margin: 8px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .custom-test {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 15px 0;
+        }
+        
+        .custom-test input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        
+        .status-badge.success { background: #dcfce7; color: #166534; }
+        .status-badge.warning { background: #fef3c7; color: #92400e; }
+        .status-badge.error { background: #fecaca; color: #991b1b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Moodle LTI Token Endpoint Diagnostic</h1>
+        
+        <div class="section">
+            <h2>Current Configuration</h2>
+            <div id="currentConfig" class="config-section">
+                <div class="loading">Loading configuration...</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Automatic Endpoint Testing</h2>
+            <p>This will test common Moodle token endpoint patterns to find which one works with your setup.</p>
+            <button class="test-button" onclick="runAutomaticTests()">🚀 Test All Common Endpoints</button>
+            <div id="automaticResults" class="results" style="display: none;"></div>
+        </div>
+        
+        <div class="section">
+            <h2>Custom Endpoint Testing</h2>
+            <p>Test a specific endpoint URL:</p>
+            <div class="custom-test">
+                <input type="text" id="customEndpoint" placeholder="https://your-moodle.com/mod/lti/token.php">
+                <button class="test-button" onclick="testCustomEndpoint()">🔍 Test Endpoint</button>
+            </div>
+            <div id="customResults" class="results" style="display: none;"></div>
+        </div>
+        
+        <div class="section">
+            <h2>Moodle System Information</h2>
+            <button class="test-button" onclick="getMoodleInfo()">📋 Get Moodle LTI Info</button>
+            <div id="moodleInfo" class="results" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        
+        // Load current configuration on page load
+        window.addEventListener('load', loadCurrentConfig);
+        
+        async function loadCurrentConfig() {
+            try {
+                const response = await fetch(`${API_BASE}/diagnostic/moodle-info`);
+                const data = await response.json();
+                
+                const configDiv = document.getElementById('currentConfig');
+                configDiv.innerHTML = `
+                    <div class="config-item"><strong>Moodle Base URL:</strong> ${data.moodleBaseUrl || 'Not set'}</div>
+                    <div class="config-item"><strong>Current Token Endpoint:</strong> ${data.currentConfig.LTI_TOKEN_ENDPOINT || 'Not set'}</div>
+                    <div class="config-item"><strong>JWKS URL:</strong> ${data.currentConfig.LTI_JWKS_URL || 'Not set'}</div>
+                    <div class="config-item"><strong>Client ID:</strong> ${data.currentConfig.LTI_CLIENT_ID || 'Not set'}</div>
+                    <div class="config-item"><strong>Issuer:</strong> ${data.currentConfig.LTI_ISSUER || 'Not set'}</div>
+                `;
+                
+                // Pre-fill custom endpoint with current token endpoint
+                if (data.currentConfig.LTI_TOKEN_ENDPOINT) {
+                    document.getElementById('customEndpoint').value = data.currentConfig.LTI_TOKEN_ENDPOINT;
+                }
+                
+            } catch (error) {
+                document.getElementById('currentConfig').innerHTML = 
+                    `<div style="color: red;">Failed to load configuration: ${error.message}</div>`;
+            }
+        }
+        
+        async function runAutomaticTests() {
+            const resultsDiv = document.getElementById('automaticResults');
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<div class="loading">🔄 Testing endpoints... This may take a moment.</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/diagnostic/test-token-endpoints`);
+                const data = await response.json();
+                
+                let html = '<h3>📊 Test Results</h3>';
+                
+                // Show recommendations first
+                if (data.recommendations && data.recommendations.length > 0) {
+                    html += '<h4>💡 Recommendations</h4>';
+                    data.recommendations.forEach(rec => {
+                        html += `
+                            <div class="recommendation ${rec.type}">
+                                <strong>${rec.type.toUpperCase()}:</strong> ${rec.message}<br>
+                                <strong>Action:</strong> ${rec.action}
+                                ${rec.endpoints ? `<br><strong>Working endpoints:</strong> ${rec.endpoints.join(', ')}` : ''}
+                                ${rec.possibleEndpoints ? `<br><strong>Possible endpoints:</strong> ${rec.possibleEndpoints.join(', ')}` : ''}
+                            </div>
+                        `;
+                    });
+                }
+                
+                // Show detailed results
+                html += '<h4>🔍 Detailed Results</h4>';
+                data.testResults.forEach(result => {
+                    const status = result.tokenRequestTest?.success ? 'success' : 
+                                 result.accessible ? 'warning' : 'error';
+                    
+                    html += `
+                        <div class="endpoint-result ${status}">
+                            <div class="endpoint-url">${result.endpoint}</div>
+                            <div class="detail">
+                                <strong>Accessible:</strong> ${result.accessible ? '✅ Yes' : '❌ No'}
+                                ${result.accessible ? `<span class="status-badge ${getStatusClass(result.accessibilityDetails.status)}">${result.accessibilityDetails.status}</span>` : ''}
+                            </div>
+                            ${result.tokenRequestTest ? `
+                                <div class="detail">
+                                    <strong>Token Request:</strong> ${result.tokenRequestTest.success ? '✅ Success' : '❌ Failed'}
+                                    ${result.tokenRequestTest.status ? `<span class="status-badge ${getStatusClass(result.tokenRequestTest.status)}">${result.tokenRequestTest.status}</span>` : ''}
+                                </div>
+                                ${result.tokenRequestTest.hasAccessToken ? '<div class="detail">✅ Access token received</div>' : ''}
+                                ${result.tokenRequestTest.error ? `<div class="detail" style="color: red;">Error: ${result.tokenRequestTest.error}</div>` : ''}
+                            ` : ''}
+                            ${result.error ? `<div class="detail" style="color: red;">Error: ${result.error}</div>` : ''}
+                            <div class="detail"><strong>Recommended:</strong> ${result.recommended ? '✅ Yes' : '❌ No'}</div>
+                        </div>
+                    `;
+                });
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div style="color: red;">❌ Test failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function testCustomEndpoint() {
+            const endpoint = document.getElementById('customEndpoint').value.trim();
+            const resultsDiv = document.getElementById('customResults');
+            
+            if (!endpoint) {
+                alert('Please enter an endpoint URL');
+                return;
+            }
+            
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<div class="loading">🔄 Testing custom endpoint...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/diagnostic/test-custom-endpoint`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ endpoint })
+                });
+                
+                const data = await response.json();
+                
+                let html = `<h3>🔍 Custom Endpoint Test: ${endpoint}</h3>`;
+                
+                // Accessibility test
+                html += '<h4>📡 Accessibility Test</h4>';
+                if (data.accessibilityTest.accessible) {
+                    html += `
+                        <div style="color: green;">✅ Endpoint is accessible</div>
+                        <div><strong>Status:</strong> ${data.accessibilityTest.status} ${data.accessibilityTest.statusText}</div>
+                        <div><strong>Content Type:</strong> ${data.accessibilityTest.contentType}</div>
+                        <div><strong>Server:</strong> ${data.accessibilityTest.serverHeader}</div>
+                        <div><strong>Contains Moodle:</strong> ${data.accessibilityTest.containsMoodle ? '✅ Yes' : '❌ No'}</div>
+                    `;
+                } else {
+                    html += `
+                        <div style="color: red;">❌ Endpoint not accessible</div>
+                        <div><strong>Error:</strong> ${data.accessibilityTest.error}</div>
+                    `;
+                }
+                
+                // Token test
+                html += '<h4>🔑 Token Request Test</h4>';
+                if (data.tokenTest.skipped) {
+                    html += `<div style="color: orange;">⚠️ Skipped: ${data.tokenTest.error}</div>`;
+                } else if (data.tokenTest.success) {
+                    html += `
+                        <div style="color: green;">✅ Token request successful!</div>
+                        <div><strong>Status:</strong> ${data.tokenTest.status}</div>
+                        <div><strong>Has Access Token:</strong> ${data.tokenTest.hasAccessToken ? '✅ Yes' : '❌ No'}</div>
+                    `;
+                } else {
+                    html += `
+                        <div style="color: red;">❌ Token request failed</div>
+                        <div><strong>Status:</strong> ${data.tokenTest.status || 'Unknown'}</div>
+                        <div><strong>Error:</strong> ${data.tokenTest.error || 'Unknown error'}</div>
+                        ${data.tokenTest.responsePreview ? `<div><strong>Response Preview:</strong><pre>${data.tokenTest.responsePreview}</pre></div>` : ''}
+                    `;
+                }
+                
+                // Recommendation
+                html += `<div class="recommendation ${data.tokenTest.success ? 'success' : 'error'}">${data.recommendation}</div>`;
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div style="color: red;">❌ Test failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function getMoodleInfo() {
+            const resultsDiv = document.getElementById('moodleInfo');
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<div class="loading">🔄 Getting Moodle information...</div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/diagnostic/moodle-info`);
+                const data = await response.json();
+                
+                let html = '<h3>📋 Moodle LTI Configuration</h3>';
+                
+                html += `<div><strong>Moodle Base URL:</strong> ${data.moodleBaseUrl}</div>`;
+                
+                html += '<h4>🔍 Certificate Endpoints Test</h4>';
+                data.certEndpoints.forEach(cert => {
+                    html += `
+                        <div style="margin: 10px 0;">
+                            <strong>${cert.endpoint}</strong>
+                            ${cert.accessible ? 
+                                `<span style="color: green; margin-left: 10px;">✅ Accessible (${cert.status})</span>` :
+                                `<span style="color: red; margin-left: 10px;">❌ Not accessible</span>`
+                            }
+                        </div>
+                    `;
+                });
+                
+                html += '<h4>💡 Recommended Token Endpoints</h4>';
+                data.recommendedTokenEndpoints.forEach(endpoint => {
+                    html += `<div style="font-family: monospace; margin: 5px 0;">${endpoint}</div>`;
+                });
+                
+                html += '<h4>⚙️ Current Configuration</h4>';
+                Object.entries(data.currentConfig).forEach(([key, value]) => {
+                    html += `<div><strong>${key}:</strong> ${value || 'Not set'}</div>`;
+                });
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div style="color: red;">❌ Failed to get Moodle info: ${error.message}</div>`;
+            }
+        }
+        
+        function getStatusClass(status) {
+            if (status >= 200 && status < 300) return 'success';
+            if (status >= 300 && status < 400) return 'warning';
+            return 'error';
+        }
+    </script>
+</body>
+</html>
