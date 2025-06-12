@@ -32,15 +32,6 @@ jobs:
       # ======================
       # CLIENT (REACT) - FIXED
       # ======================
-      - name: Debug - Check client directory structure
-        run: |
-          echo "=== Client directory contents ==="
-          ls -la client/
-          echo "=== package.json contents ==="
-          cat client/package.json
-          echo "=== Check for package-lock.json ==="
-          ls -la client/package-lock.json || echo "package-lock.json not found"
-      
       - name: Set up Node.js for client
         uses: actions/setup-node@v4
         with:
@@ -52,278 +43,39 @@ jobs:
         working-directory: ./client
         run: |
           echo "=== Starting clean dependency installation ==="
-          
-          # Remove existing node_modules and package-lock.json for clean install
           rm -rf node_modules package-lock.json
-          
-          # Install all dependencies fresh
           npm install
           
-          # Verify react-router-dom installation
           echo "=== Verifying react-router-dom installation ==="
-          npm list react-router-dom || echo "react-router-dom not found in dependencies"
+          npm list react-router-dom || npm install react-router-dom@^6.8.0
           
-          # Check if react-router-dom is actually installed
-          if [ ! -d "node_modules/react-router-dom" ]; then
-            echo "react-router-dom directory not found, forcing installation..."
-            npm install react-router-dom@^6.8.0 --save
-          fi
-          
-          echo "=== Final dependency verification ==="
-          npm list react-router-dom
-          ls -la node_modules/react-router-dom || echo "react-router-dom directory missing"
-          
-          echo "=== React Router Dom package.json check ==="
-          cat node_modules/react-router-dom/package.json | head -10 || echo "Cannot read react-router-dom package.json"
-          
-          # Fix permissions
           echo "=== Fixing permissions ==="
           chmod -R +x node_modules/.bin/
-          ls -la node_modules/.bin/react-scripts || echo "react-scripts not found in .bin"
       
-      - name: Debug Jest configuration and module resolution
+      - name: Create Jest config for module resolution
         working-directory: ./client
         run: |
-          echo "=== Jest and module resolution debugging ==="
-          echo "NODE_ENV: $NODE_ENV"
-          echo "CI: $CI"
-          
-          echo "=== Checking Jest config ==="
-          npx react-scripts test --showConfig --passWithNoTests --watchAll=false || echo "Could not show Jest config"
-          
-          echo "=== Checking module resolution paths ==="
-          node -e "console.log('Module paths:', require.resolve.paths('react-router-dom'))"
-          
-          echo "=== Verifying react-router-dom installation ==="
-          ls -la node_modules/react-router-dom/ | head -5
-          
-          echo "=== Checking if Jest can resolve react-router-dom ==="
-          node -e "
-          const resolver = require('jest-resolve');
-          const path = require('path');
-          try {
-            const resolved = resolver.resolve('react-router-dom', {
-              basedir: path.resolve('./src'),
-              moduleDirectories: ['node_modules'],
-              extensions: ['.js', '.jsx', '.json']
-            });
-            console.log('Jest can resolve react-router-dom at:', resolved);
-          } catch(e) {
-            console.log('Jest resolution failed:', e.message);
-          }
-          "
-        env:
-          CI: true
-          NODE_ENV: test
-      
-      - name: Fix Jest module resolution and run tests
-        working-directory: ./client
-        run: |
-          echo "=== Creating Jest setup to fix module resolution ==="
-          
-          # Create a temporary jest config to help with module resolution
           cat > jest.config.js << 'EOF'
           module.exports = {
             testEnvironment: 'jsdom',
             setupFilesAfterEnv: ['<rootDir>/src/setupTests.js'],
             moduleNameMapper: {
-              '^react-router-dom
-      
-      # ======================
-      # SERVER (NODE.JS)
-      # ======================
-      - name: Set up Node.js for server
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18.x'
-          cache: 'npm'
-          cache-dependency-path: 'server/package-lock.json'
-      
-      - name: Install server dependencies
-        working-directory: ./server
-        run: |
-          npm ci
-          npm list --depth=0
-          # Fix permissions for server as well
-          chmod -R +x node_modules/.bin/
-      
-      - name: Run server tests
-        working-directory: ./server
-        run: npm test
-        env:
-          NODE_ENV: test
-          MONGODB_URI: mongodb://localhost:27017/lti-test
-      
-      # ======================
-      # PYTHON MICROSERVICE
-      # ======================
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          cache: 'pip'
-      
-      - name: Install Python dependencies
-        working-directory: ./python
-        run: |
-          pip install -r requirements.txt
-          pip list
-      
-      - name: Run Python tests
-        working-directory: ./python
-        run: pytest -v --cov=.
-      
-      # ======================
-      # DOCKER BUILD & PUSH
-      # ======================
-      - name: Log in to GitHub Container Registry
-        if: github.ref == 'refs/heads/master'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push Docker images
-        if: github.ref == 'refs/heads/master'
-        run: |
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-client:latest ./client
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-server:latest ./server
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-python:latest ./python
-          
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-client:latest
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-server:latest
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-python:latest
-      
-      # ======================
-      # AWS DEPLOYMENT
-      # ======================
-      - name: Configure AWS credentials
-        if: github.ref == 'refs/heads/master'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
-      
-      - name: Deploy to AWS ECS
-        if: github.ref == 'refs/heads/master'
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ./aws/task-definition.json
-          service: lti-assessment-service
-          cluster: lti-cluster
-          wait-for-service-stability: true: '<rootDir>/node_modules/react-router-dom/dist/index.js'
+              '^react-router-dom$': require.resolve('react-router-dom')
             },
-            transform: {
-              '^.+\\.(js|jsx)
-      
-      # ======================
-      # SERVER (NODE.JS)
-      # ======================
-      - name: Set up Node.js for server
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18.x'
-          cache: 'npm'
-          cache-dependency-path: 'server/package-lock.json'
-      
-      - name: Install server dependencies
-        working-directory: ./server
-        run: |
-          npm ci
-          npm list --depth=0
-          # Fix permissions for server as well
-          chmod -R +x node_modules/.bin/
-      
-      - name: Run server tests
-        working-directory: ./server
-        run: npm test
-        env:
-          NODE_ENV: test
-          MONGODB_URI: mongodb://localhost:27017/lti-test
-      
-      # ======================
-      # PYTHON MICROSERVICE
-      # ======================
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          cache: 'pip'
-      
-      - name: Install Python dependencies
-        working-directory: ./python
-        run: |
-          pip install -r requirements.txt
-          pip list
-      
-      - name: Run Python tests
-        working-directory: ./python
-        run: pytest -v --cov=.
-      
-      # ======================
-      # DOCKER BUILD & PUSH
-      # ======================
-      - name: Log in to GitHub Container Registry
-        if: github.ref == 'refs/heads/master'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push Docker images
-        if: github.ref == 'refs/heads/master'
-        run: |
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-client:latest ./client
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-server:latest ./server
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-python:latest ./python
-          
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-client:latest
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-server:latest
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-python:latest
-      
-      # ======================
-      # AWS DEPLOYMENT
-      # ======================
-      - name: Configure AWS credentials
-        if: github.ref == 'refs/heads/master'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
-      
-      - name: Deploy to AWS ECS
-        if: github.ref == 'refs/heads/master'
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ./aws/task-definition.json
-          service: lti-assessment-service
-          cluster: lti-cluster
-          wait-for-service-stability: true: 'babel-jest'
-            },
-            moduleFileExtensions: ['js', 'jsx', 'json'],
+            resetMocks: false,
             collectCoverageFrom: [
               'src/**/*.{js,jsx}',
               '!src/index.js',
               '!src/reportWebVitals.js'
-            ],
-            resetMocks: false
+            ]
           };
           EOF
-          
-          echo "=== Running tests with custom Jest config ==="
-          npx jest --config jest.config.js --coverage --passWithNoTests --verbose --no-cache
-          
-          # If that fails, try without custom config but clear Jest cache
-          if [ $? -ne 0 ]; then
-            echo "=== Custom config failed, trying with cleared cache ==="
-            rm -f jest.config.js
-            npx jest --clearCache
-            npm test -- --coverage --watchAll=false --passWithNoTests --verbose
-          fi
+      
+      - name: Run client tests
+        working-directory: ./client
+        run: |
+          echo "=== Running tests with Jest config ==="
+          npx jest --config jest.config.js --coverage --passWithNoTests --verbose
         env:
           CI: true
           NODE_ENV: test
@@ -342,8 +94,6 @@ jobs:
         working-directory: ./server
         run: |
           npm ci
-          npm list --depth=0
-          # Fix permissions for server as well
           chmod -R +x node_modules/.bin/
       
       - name: Run server tests
