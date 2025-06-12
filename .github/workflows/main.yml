@@ -1,9 +1,9 @@
 name: LTI Assessment CI/CD
 on:
   push:
-    branches: [ main ]  # Changed from master
+    branches: [ master ]  # Changed from master
   pull_request:
-    branches: [ main ]  # Changed from master
+    branches: [ master ]  # Changed from master
 
 env:
   CI: true  # Important for React tests
