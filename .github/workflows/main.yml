@@ -30,17 +30,15 @@ jobs:
         uses: actions/checkout@v4
       
       # ======================
-      # NODE.JS SETUP
+      # CLIENT (REACT)
       # ======================
-      - name: Set up Node.js
+      - name: Set up Node.js for client
         uses: actions/setup-node@v4
         with:
           node-version: '18.x'
           cache: 'npm'
+          cache-dependency-path: 'client/package-lock.json'
       
-      # ======================
-      # CLIENT (REACT)
-      # ======================
       - name: Install client dependencies
         working-directory: ./client
         run: |
@@ -56,6 +54,13 @@ jobs:
       # ======================
       # SERVER (NODE.JS)
       # ======================
+      - name: Set up Node.js for server
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          cache-dependency-path: 'server/package-lock.json'
+      
       - name: Install server dependencies
         working-directory: ./server
         run: |
