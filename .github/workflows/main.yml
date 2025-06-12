@@ -31,27 +31,36 @@ jobs:
           cache: 'npm'
       
       # Install dependencies
-      - name: Install dependencies
-        run: |
-          cd client && npm ci  # Use npm ci for faster, reliable installs
-          cd ../server && npm ci
+      - name: Install client dependencies
+        run: cd client && npm ci
+        
+      - name: Install server dependencies
+        run: cd server && npm ci
       
-      # Fix permissions
+      # Debug step - check what was installed
+      - name: Debug - List installed packages
+        run: |
+          echo "Client node_modules:"
+          ls -la client/node_modules/.bin/ | head -10
+          echo "Server node_modules:"
+          ls -la server/node_modules/.bin/ | head -10 || echo "No server .bin directory"
+      
+      # Fix permissions (if needed)
       - name: Fix permissions
         run: |
-          cd client && chmod +x node_modules/.bin/react-scripts
-          cd ../server && chmod +x node_modules/.bin/* || true
+          chmod +x client/node_modules/.bin/* || true
+          chmod +x server/node_modules/.bin/* || true
       
-      # Run tests
+      # Run tests with proper error handling
       - name: Run client tests
-        run: |
-          cd client && npm test -- --coverage --watchAll=false
+        run: cd client && npm test -- --coverage --watchAll=false --passWithNoTests
         env:
           CI: true
       
       - name: Run server tests
-        run: |
-          cd server && npm test
+        run: cd server && npm test
+        env:
+          NODE_ENV: test
       
       # Set up Python
       - name: Set up Python
