@@ -30,8 +30,17 @@ jobs:
         uses: actions/checkout@v4
       
       # ======================
-      # CLIENT (REACT)
+      # CLIENT (REACT) - FIXED
       # ======================
+      - name: Debug - Check client directory structure
+        run: |
+          echo "=== Client directory contents ==="
+          ls -la client/
+          echo "=== package.json contents ==="
+          cat client/package.json
+          echo "=== Check for package-lock.json ==="
+          ls -la client/package-lock.json || echo "package-lock.json not found"
+      
       - name: Set up Node.js for client
         uses: actions/setup-node@v4
         with:
@@ -39,29 +48,54 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'client/package-lock.json'
       
-      - name: Install client dependencies
+      - name: Install client dependencies with fallback
         working-directory: ./client
         run: |
-          # Check if package.json exists
-          if [ ! -f package.json ]; then
-            echo "Error: package.json not found in client directory"
-            exit 1
+          echo "=== Starting dependency installation ==="
+          
+          # Try npm ci first (preferred for CI)
+          if npm ci; then
+            echo "npm ci succeeded"
+          else
+            echo "npm ci failed, trying npm install"
+            rm -f package-lock.json
+            npm install
           fi
           
-          # Use npm install instead of npm ci for flexibility
-          npm install
+          # Ensure react-router-dom is installed (defensive programming)
+          if ! npm list react-router-dom > /dev/null 2>&1; then
+            echo "react-router-dom not found, installing..."
+            npm install react-router-dom@^6.8.0
+          else
+            echo "react-router-dom is already installed"
+            npm list react-router-dom
+          fi
           
-          # Ensure react-router-dom is installed
-          npm install react-router-dom
-          
-          # List installed packages for debugging
+          echo "=== Final dependency list ==="
           npm list --depth=0
+          
+          # Fix permissions for node_modules/.bin (Solution 1)
+          echo "=== Fixing permissions ==="
+          chmod -R +x node_modules/.bin/
+          ls -la node_modules/.bin/react-scripts || echo "react-scripts not found in .bin"
       
       - name: Run client tests
         working-directory: ./client
-        run: npm test -- --coverage --watchAll=false --passWithNoTests
+        run: |
+          echo "=== Running tests ==="
+          # Solution 2: Use npx instead of npm test
+          npx react-scripts test --coverage --watchAll=false --passWithNoTests --verbose
         env:
           CI: true
+      
+      # Alternative approach - uncomment if the above doesn't work
+      # - name: Run client tests (Alternative)
+      #   working-directory: ./client
+      #   run: |
+      #     echo "=== Running tests with direct node execution ==="
+      #     node node_modules/.bin/react-scripts test --coverage --watchAll=false --passWithNoTests --verbose
+      #   env:
+      #     CI: true
       
       # ======================
       # SERVER (NODE.JS)
@@ -78,6 +112,8 @@ jobs:
         run: |
           npm ci
           npm list --depth=0
+          # Fix permissions for server as well
+          chmod -R +x node_modules/.bin/
       
       - name: Run server tests
         working-directory: ./server
