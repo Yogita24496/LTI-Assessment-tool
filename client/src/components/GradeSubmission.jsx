@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { submitGrade, getAssessment } from '../services/api';
 
+
 const GradeSubmission = ({ score, assessment, totalQuestions, correctAnswers }) => {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -10,7 +11,6 @@ const GradeSubmission = ({ score, assessment, totalQuestions, correctAnswers }) 
   const [isGradeSaved, setIsGradeSaved] = useState(assessment.passbackStatus === 'success');
 
   useEffect(() => {
-    // Check if grade is already saved
     if (assessment.passbackStatus === 'success') {
       setIsGradeSaved(true);
     }

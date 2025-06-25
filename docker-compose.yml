@@ -2,44 +2,81 @@ version: '3.8'
 
 services:
   client:
-    build: ./client
+    build:
+      context: .
+      dockerfile: client/Dockerfile
     ports:
-      - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=http://server:3001/api
-      - REACT_APP_PYTHON_API_URL=http://python:5000/api
+      - "3000:80"
     depends_on:
-      - server
-      - python
-    volumes:
-      - ./client:/app
-      - /app/node_modules
+      server:
+        condition: service_healthy
+    environment:
+      - REACT_APP_API_URL=http://localhost:3001/api
+    networks:
+      - lti-network
+    restart: unless-stopped
 
   server:
-    build: ./server
+    build:
+      context: .
+      dockerfile: server/Dockerfile  # This should point to where your Dockerfile is
     ports:
       - "3001:3001"
     environment:
-      - MONGODB_URI=mongodb://mongo:27017/lti-grade-passback
-      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongo:27017/lti-gradepassback
+      - PORT=3001
+      - NODE_ENV=production
+      - PYTHON_SERVICE_URL=http://python-service:8000
     depends_on:
-      - mongo
-    volumes:
-      - ./server:/app
-      - /app/node_modules
+      mongo:
+        condition: service_healthy
+      python-service:
+        condition: service_healthy
+    networks:
+      - lti-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    working_dir: /app
+    command: >
+      sh -c "
+        echo 'Waiting for dependencies...' &&
+        sleep 10 &&
+        echo 'Current directory:' && pwd &&
+        echo 'Files in current directory:' && ls -la &&
+        echo 'Checking for registerPlatform.js...' &&
+        if [ -f registerPlatform.js ]; then
+          echo 'Found registerPlatform.js, executing...' &&
+          node registerPlatform.js
+        else
+          echo 'registerPlatform.js not found, skipping...'
+        fi &&
+        echo 'Starting server...' &&
+        node server.js
+      "
 
-  python:
-    build: ./lti_python
+  python-service:
+    build:
+      context: .
+      dockerfile: python/Dockerfile
     ports:
-      - "5000:5000"
+      - "8000:8000"
     environment:
-      - FLASK_DEBUG=True
-      - LTI_JWKS_URL=${LTI_JWKS_URL}
-      - LTI_TOKEN_ENDPOINT=${LTI_TOKEN_ENDPOINT}
-      - LTI_CLIENT_ID=${LTI_CLIENT_ID}
-      - LTI_PRIVATE_KEY=${LTI_PRIVATE_KEY}
-    volumes:
-      - ./lti_python:/app
+      - PYTHON_SERVICE_PORT=8000
+      - SERVER_URL=http://server:3001
+    networks:
+      - lti-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
 
   mongo:
     image: mongo:5.0
@@ -47,6 +84,21 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    networks:
+      - lti-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongo", "--quiet", "--eval", "db.runCommand('ping').ok"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    environment:
+      - MONGO_INITDB_DATABASE=lti-gradepassback
 
 volumes:
   mongo-data:
+
+networks:
+  lti-network:
+    driver: bridge

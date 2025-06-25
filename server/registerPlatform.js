@@ -3,11 +3,8 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const LTIDeployment = require('./models/LTIDeployment');
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
+// Database connection - removed deprecated options
+mongoose.connect(process.env.MONGODB_URI)
 .then(() => console.log('Connected to MongoDB'))
 .catch(err => {
   console.error('Failed to connect to MongoDB:', err);

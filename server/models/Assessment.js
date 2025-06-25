@@ -75,6 +75,10 @@ const AssessmentSchema = new mongoose.Schema({
   }, isGradeSubmitted: {
     type: Boolean,
     default: false
+  },
+ submissionAttempts: {
+    type: Number,
+    default: 0
   }
 });
 

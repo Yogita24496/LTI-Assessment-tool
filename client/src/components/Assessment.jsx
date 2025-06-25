@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { createAssessment, getUserAssessments } from '../services/api';
 import GradeSubmission from './GradeSubmission';
 
+
 const Assessment = () => {
   const [launchData, setLaunchData] = useState(null);
   const [questions, setQuestions] = useState([
@@ -23,7 +24,7 @@ const Assessment = () => {
   const [assessment, setAssessment] = useState(null);
   const [completedAssessment, setCompletedAssessment] = useState(null);
   const navigate = useNavigate();
-
+const [submissionAttempts, setSubmissionAttempts] = useState(0);
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const launchDataParam = urlParams.get('data');
@@ -33,7 +34,7 @@ const Assessment = () => {
       localStorage.setItem('ltiLaunchData', JSON.stringify(data));
       setLaunchData(data);
       window.history.replaceState({}, document.title, "/assessment");
-      
+
       // Check if assessment is already completed
       checkCompletedAssessment(data.userId, data.resourceLinkId);
     } else {
@@ -41,27 +42,27 @@ const Assessment = () => {
       if (!storedLaunchData) navigate('/');
       const data = JSON.parse(storedLaunchData);
       setLaunchData(data);
-      
+
       // Check if assessment is already completed
       checkCompletedAssessment(data.userId, data.resourceLinkId);
     }
   }, [navigate]);
 
   const checkCompletedAssessment = async (userId, resourceLinkId) => {
-    try {
-      const assessments = await getUserAssessments(userId);
-      const completed = assessments.find(a => 
-        a.resourceLinkId === resourceLinkId && 
-        a.passbackStatus === 'success'
-      );
-      if (completed) {
-        setCompletedAssessment(completed);
-      }
-    } catch (error) {
-      console.error('Error checking completed assessments:', error);
+  try {
+    const assessments = await getUserAssessments(userId);
+    const completed = assessments.filter(a => 
+      a.resourceLinkId === resourceLinkId
+    ).sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+    
+    if (completed.length > 0) {
+      setCompletedAssessment(completed[0]);
+      setSubmissionAttempts(completed.length);
     }
-  };
-
+  } catch (error) {
+    console.error('Error checking completed assessments:', error);
+  }
+};
 
   const handleAnswerSelect = (questionId, answer) => {
     setAnswers({ ...answers, [questionId]: answer });
@@ -93,9 +94,17 @@ const Assessment = () => {
         };
 
         const result = await createAssessment(assessmentData);
+        if (result.error && result.error.includes('Maximum submission attempts')) {
+        alert(`You've reached the maximum of 3 submission attempts.`);
+        return;
+      }
         setAssessment(result.assessment);
       } catch (error) {
+        if (error.response?.data?.error?.includes('Maximum submission attempts')) {
+        alert(`You've reached the maximum of 3 submission attempts.`);
+      } else {
         console.error('Error creating assessment:', error);
+      }
       }
     }
 
@@ -103,7 +112,7 @@ const Assessment = () => {
   };
 
   if (!launchData) {
-    return <div>Loading...</div>;
+    return <div className="lti-launch-container"><div className="loading-spinner"></div>Loading...</div>;
   }
 
   if (completedAssessment) {
@@ -171,3 +180,4 @@ const Assessment = () => {
 };
 
 export default Assessment;
+

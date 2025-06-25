@@ -40,6 +40,21 @@ exports.createAssessment = async (req, res, next) => {
     if (!userId || !courseId || !resourceLinkId || !lineItemUrl || scoreGiven === undefined) {
       return res.status(400).json({ error: 'Missing required assessment data' });
     }
+    
+     // Check existing submissions
+    const existingSubmissions = await Assessment.find({
+      userId,
+      courseId,
+      resourceLinkId
+    }).sort({ submittedAt: -1 });
+
+    if (existingSubmissions.length >= 3) {
+      return res.status(400).json({
+        error: 'Maximum submission attempts (3) reached',
+        maxAttempts: 3,
+        attemptsUsed: existingSubmissions.length
+      });
+    }
 
     // Try to get LTI deployment info if not provided
     let ltiDeployment = { issuer, clientId, deploymentId };
@@ -69,7 +84,8 @@ exports.createAssessment = async (req, res, next) => {
       // Add LTI deployment fields if available
       ...(ltiDeployment.issuer && { issuer: ltiDeployment.issuer }),
       ...(ltiDeployment.clientId && { clientId: ltiDeployment.clientId }),
-      ...(ltiDeployment.deploymentId && { deploymentId: ltiDeployment.deploymentId })
+      ...(ltiDeployment.deploymentId && { deploymentId: ltiDeployment.deploymentId }),
+      submissionAttempts: existingSubmissions.length + 1
     });
    
     await assessment.save();
@@ -83,9 +99,6 @@ exports.createAssessment = async (req, res, next) => {
     next(error);
   }
 };
-
-// server/controllers/assessmentController.js
-// ... (previous imports remain the same)
 
 exports.submitGrade = async (req, res, next) => {
   try {
@@ -144,9 +157,6 @@ exports.submitGrade = async (req, res, next) => {
     });
   }
 };
-
-// ... (rest of the controller remains the same)
-
 
 
 
