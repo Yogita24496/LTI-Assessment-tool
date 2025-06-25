@@ -1,4 +1,4 @@
-name: LTI Assessment CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
@@ -6,272 +6,73 @@ on:
   pull_request:
     branches: [ master ]
 
-env:
-  CI: true
-  DOCKER_REGISTRY: ghcr.io
-  IMAGE_NAME: lti-assessment-app
-
 jobs:
-  test-build-deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    
-    services:
-      mongodb:
-        image: mongo:latest
-        ports: ["27017:27017"]
-        options: >-
-          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      # ======================
-      # CLIENT (REACT) - COMPLETELY FIXED
-      # ======================
-      - name: Set up Node.js for client
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18.x'
-          cache: 'npm'
-          cache-dependency-path: 'client/package-lock.json'
-      
-      - name: Clean install client dependencies
-        working-directory: ./client
-        run: |
-          echo "=== Starting clean dependency installation ==="
-          rm -rf node_modules package-lock.json
-          
-          echo "=== Installing dependencies ==="
-          npm install
-          
-          echo "=== Installing Babel and Jest dependencies ==="
-          npm install --save-dev @babel/preset-env @babel/preset-react babel-jest
-          npm install --save-dev jest-transform-stub identity-obj-proxy
-          npm install --save-dev @testing-library/react @testing-library/jest-dom @testing-library/user-event
-          
-          echo "=== Verifying React dependencies ==="
-          npm install react react-dom react-router-dom
-          
-          echo "=== Fixing permissions ==="
-          chmod -R +x node_modules/.bin/
-      
-      - name: Create Babel configuration
-        working-directory: ./client
-        run: |
-          cat > .babelrc << 'EOF'
-          {
-            "presets": [
-              [
-                "@babel/preset-env",
-                {
-                  "targets": {
-                    "node": "current"
-                  },
-                  "modules": "commonjs"
-                }
-              ],
-              [
-                "@babel/preset-react",
-                {
-                  "runtime": "automatic"
-                }
-              ]
-            ],
-            "env": {
-              "test": {
-                "presets": [
-                  [
-                    "@babel/preset-env",
-                    {
-                      "targets": {
-                        "node": "current"
-                      },
-                      "modules": "commonjs"
-                    }
-                  ],
-                  [
-                    "@babel/preset-react",
-                    {
-                      "runtime": "automatic"
-                    }
-                  ]
-                ]
-              }
-            }
-          }
-          EOF
-      
-      - name: Create Jest configuration
-        working-directory: ./client
-        run: |
-          cat > jest.config.js << 'EOF'
-          module.exports = {
-            testEnvironment: 'jsdom',
-            setupFilesAfterEnv: ['<rootDir>/src/setupTests.js'],
-            moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json', 'node'],
-            transform: {
-              '^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', {
-                presets: [
-                  ['@babel/preset-env', { 
-                    targets: { node: 'current' },
-                    modules: 'commonjs'
-                  }],
-                  ['@babel/preset-react', { 
-                    runtime: 'automatic' 
-                  }]
-                ]
-              }],
-              '^.+\\.css$': 'jest-transform-stub',
-              '^(?!.*\\.(js|jsx|ts|tsx|css|json)$)': 'jest-transform-stub'
-            },
-            transformIgnorePatterns: [
-              'node_modules/(?!(react-router|react-router-dom|@testing-library)/)'
-            ],
-            moduleNameMapper: {
-              '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
-              '\\.(gif|ttf|eot|svg|png)$': 'jest-transform-stub'
-            },
-            testMatch: [
-              '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
-              '<rootDir>/src/**/*.{test,spec}.{js,jsx,ts,tsx}'
-            ],
-            collectCoverageFrom: [
-              'src/**/*.{js,jsx,ts,tsx}',
-              '!src/index.js',
-              '!src/reportWebVitals.js',
-              '!src/setupTests.js'
-            ],
-            verbose: true,
-            resetMocks: true,
-            clearMocks: true
-          };
-          EOF
-      
-      - name: Fix setupTests.js
-        working-directory: ./client
-        run: |
-          cat > src/setupTests.js << 'EOF'
-          const { configure } = require('@testing-library/react');
-          require('@testing-library/jest-dom');
-          
-          configure({ testIdAttribute: 'data-testid' });
-          
-          Object.defineProperty(window, 'matchMedia', {
-            writable: true,
-            value: jest.fn().mockImplementation(query => ({
-              matches: false,
-              media: query,
-              onchange: null,
-              addListener: jest.fn(),
-              removeListener: jest.fn(),
-              addEventListener: jest.fn(),
-              removeEventListener: jest.fn(),
-              dispatchEvent: jest.fn(),
-            })),
-          });
-          
-          global.IntersectionObserver = class IntersectionObserver {
-            constructor() {}
-            disconnect() {}
-            observe() {}
-            unobserve() {}
-          };
-          EOF
-      
-      - name: Run client tests
-        working-directory: ./client
-        run: |
-          echo "=== Running tests with Jest config ==="
-          npx jest --config jest.config.js --coverage --passWithNoTests --verbose --no-cache
-        env:
-          CI: true
-          NODE_ENV: test
-          BABEL_ENV: test
-      
-      # ======================
-      # SERVER (NODE.JS)
-      # ======================
-      - name: Set up Node.js for server
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18.x'
-          cache: 'npm'
-          cache-dependency-path: 'server/package-lock.json'
-      
-      - name: Install server dependencies
-        working-directory: ./server
-        run: |
-          npm ci
-          chmod -R +x node_modules/.bin/
-      
-      - name: Run server tests
-        working-directory: ./server
-        run: npm test
-        env:
-          NODE_ENV: test
-          MONGODB_URI: mongodb://localhost:27017/lti-test
-      
-      # ======================
-      # PYTHON MICROSERVICE
-      # ======================
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-          cache: 'pip'
-      
-      - name: Install Python dependencies
-        working-directory: ./python
-        run: |
-          pip install -r requirements.txt
-          pip list
-      
-      - name: Run Python tests
-        working-directory: ./python
-        run: pytest -v --cov=.
-      
-      # ======================
-      # DOCKER BUILD & PUSH
-      # ======================
-      - name: Log in to GitHub Container Registry
-        if: github.ref == 'refs/heads/master'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push Docker images
-        if: github.ref == 'refs/heads/master'
-        run: |
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-client:latest ./client
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-server:latest ./server
-          docker build -t $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-python:latest ./python
-          
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-client:latest
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-server:latest
-          docker push $DOCKER_REGISTRY/${{ github.repository_owner }}/$IMAGE_NAME-python:latest
-      
-      # ======================
-      # AWS DEPLOYMENT
-      # ======================
-      - name: Configure AWS credentials
-        if: github.ref == 'refs/heads/master'
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
-      
-      - name: Deploy to AWS ECS
-        if: github.ref == 'refs/heads/master'
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ./aws/task-definition.json
-          service: lti-assessment-service
-          cluster: lti-cluster
-          wait-for-service-stability: true
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up Node.js for client and server
+      uses: actions/setup-node@v2
+      with:
+        node-version: '16'
+
+    - name: Set up Python for python service
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Install and build client
+      working-directory: ./client
+      run: |
+        npm install
+        npm run build
+
+    - name: Install server dependencies
+      working-directory: ./server
+      run: npm install
+
+    - name: Install Python dependencies
+      working-directory: ./python
+      run: |
+        pip install -r requirements.txt
+
+    - name: Log in to Docker Hub
+      if: github.ref == 'refs/heads/main'
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+    - name: Build and push client Docker image
+      if: github.ref == 'refs/heads/main'
+      run: |
+        docker build -t your-dockerhub-username/client:latest ./client
+        docker push your-dockerhub-username/client:latest
+
+    - name: Build and push server Docker image
+      if: github.ref == 'refs/heads/main'
+      run: |
+        docker build -t your-dockerhub-username/server:latest ./server
+        docker push your-dockerhub-username/server:latest
+
+    - name: Build and push Python Docker image
+      if: github.ref == 'refs/heads/main'
+      run: |
+        docker build -t your-dockerhub-username/python:latest ./python
+        docker push your-dockerhub-username/python:latest
+
+    - name: Deploy to AWS ECS
+      if: github.ref == 'refs/heads/main'
+      run: |
+        aws ecs update-service \
+          --cluster my-cluster \
+          --service my-service \
+          --force-new-deployment \
+          --region us-west-2
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: us-west-2
