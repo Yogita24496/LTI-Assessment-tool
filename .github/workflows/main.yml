@@ -17,27 +17,24 @@ jobs:
     - name: Set up Node.js for client and server
       uses: actions/setup-node@v2
       with:
-        node-version: '18'  # Updated from 16 to 18
+        node-version: '16'
 
     - name: Set up Python for python service
       uses: actions/setup-python@v2
       with:
         python-version: '3.9'
 
-    # ✅ Clean install and build client with permissions fix
-    - name: Install and build client
+    - name: Install client dependencies
       working-directory: ./client
       run: |
-         rm -rf node_modules package-lock.json
-         npm install
-         chmod +x ./node_modules/.bin/react-scripts
-         CI=false npm run build  # ✅ disables treating warnings as errors
+        rm -rf node_modules package-lock.json
+        npm install
 
-
-    # ✅ Optional: Fix audit vulnerabilities (if needed)
-    # - name: Fix vulnerabilities
-    #   working-directory: ./client
-    #   run: npm audit fix --force
+    - name: Build client (ignore warnings)
+      working-directory: ./client
+      env:
+        CI: false
+      run: npm run build
 
     - name: Install server dependencies
       working-directory: ./server
@@ -48,7 +45,6 @@ jobs:
       run: |
         pip install -r requirements.txt
 
-    # ✅ Docker login only for main branch
     - name: Log in to Docker Hub
       if: github.ref == 'refs/heads/main'
       uses: docker/login-action@v1
